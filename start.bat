@@ -1,4 +1,5 @@
 @echo off
-call conda activate aisummary
+call "%USERPROFILE%\anaconda3\Scripts\activate.bat" aisummary
 python -m streamlit run app.py
+
 pause
