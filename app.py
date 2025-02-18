@@ -10,7 +10,7 @@ DEFAULT_PROMPTS = {
     "文章总结": "You are an expert at summarizing text. Please provide a concise summary in Chinese.",
     "代码分析": "You are a code review expert. Please analyze the code and provide suggestions.",
     "通用助手": "You are a helpful assistant.",
-    "文档转文稿": "将用户输入的内容转换为纯文本，要求最大程度的保留信息完整，同时转换后的文本要求便于朗读和记忆。转换后的文本不用于阅读，只用于听读。",
+    "文档转文稿": "将用户输入的内容转换为纯文本，要求最大程度的保留信息完整，但是不包含任何md格式符号或者其他不可读符号。如果有emoji，则转换为相应文本。",
 }
 
 # AI提供者配置
