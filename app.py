@@ -382,28 +382,40 @@ def main():
             progress_bar = st.progress(0)
             status_text = st.empty()
             
-            # 创建一个区域显示处理结果
+            # 创建一个区域显示处理结果（包含状态）
             results_area = st.empty()
             processed_files = []
-            
+            skipped_count = 0
+
             for i, file_path in enumerate(txt_files):
                 status_text.text(f"⏳ 正在处理: {file_path}")
-                
-                # 处理文件
-                response = process_file(file_path, client, all_prompts[selected_prompt_name], model_id, temperature)
-                
-                # 保存响应
-                md_path = save_response(file_path, response)
-                processed_files.append((file_path, md_path))
-                
+
+                # 生成对应的 md 文件路径
+                directory = os.path.dirname(file_path)
+                filename = os.path.basename(file_path)
+                md_filename = filename.replace('.txt', '.md')
+                md_path = os.path.join(directory, md_filename)
+
+                # 如果已存在同名 md 文件，则跳过处理
+                if os.path.exists(md_path):
+                    skipped_count += 1
+                    processed_files.append((file_path, md_path, '跳过-已存在'))
+                else:
+                    # 处理文件
+                    response = process_file(file_path, client, all_prompts[selected_prompt_name], model_id, temperature)
+
+                    # 保存响应
+                    md_path = save_response(file_path, response)
+                    processed_files.append((file_path, md_path, '已处理'))
+
                 # 更新进度
                 progress = (i + 1) / len(txt_files)
                 progress_bar.progress(progress)
-                
+
                 # 更新处理结果显示
                 results_df = pd.DataFrame(
                     processed_files,
-                    columns=['源文件', '结果文件']
+                    columns=['源文件', '结果文件', '状态']
                 )
                 results_area.dataframe(
                     results_df,
@@ -412,7 +424,7 @@ def main():
                 )
             
             status_text.text("✅ 处理完成！")
-            st.success(f"成功处理 {len(txt_files)} 个文件")
+            st.success(f"完成：共扫描 {len(txt_files)} 个文件，已处理 {len(txt_files)-skipped_count} 个，跳过 {skipped_count} 个（已存在同名md）")
             
         except Exception as e:
             st.error(f"❌ 处理过程中出错: {str(e)}")
