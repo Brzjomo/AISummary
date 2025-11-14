@@ -29,14 +29,6 @@ DEFAULT_PROVIDERS = {
             "DeepSeek Chat": "deepseek-chat"
         }
     },
-    "百度文心": {
-        "base_url": "https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop/chat",
-        "models": {
-            "文心一言4.0": "ernie-bot-4",
-            "文心一言Turbo": "ernie-bot-turbo",
-            "文心一言": "ernie-bot"
-        }
-    },
     "智谱AI": {
         "base_url": "https://open.bigmodel.cn/api/paas/v3/model-api",
         "models": {
@@ -48,11 +40,11 @@ DEFAULT_PROVIDERS = {
     "硅基流动": {
         "base_url": "https://api.siliconflow.cn/v1",
         "models": {
-            "Qwen2.5-72B-Instruct": "Qwen/Qwen2.5-72B-Instruct",
-            "QwQ-32B-Preview": "Qwen/QwQ-32B-Preview",
-            "QVQ-72B-Preview": "Qwen/QVQ-72B-Preview",
-            "Qwen2.5-Coder-32B-Instruct": "Qwen/Qwen2.5-Coder-32B-Instruct",
-            "DeepSeek-V2.5": "deepseek-ai/DeepSeek-V2.5"
+            "Hunyuan-A13B-Instruct": "tencent/Hunyuan-A13B-Instruct",
+            "Qwen3-Next-80B-A3B-Instruct": "Qwen/Qwen3-Next-80B-A3B-Instruct",
+            "Qwen3-Omni-30B-A3B-Thinking": "Qwen/Qwen3-Omni-30B-A3B-Thinking",
+            "Qwen3-Omni-30B-A3B-Instruct": "Qwen/Qwen3-Omni-30B-A3B-Instruct",
+            "DeepSeek-V3": "deepseek-ai/DeepSeek-V3"
         }
     }
 }
@@ -92,7 +84,7 @@ def scan_txt_files(directory):
                 txt_files.append(os.path.join(root, file))
     return txt_files
 
-def process_file(file_path, client, system_prompt, model_id):
+def process_file(file_path, client, system_prompt, model_id, temperature=0.7):
     """处理单个文件并返回AI响应"""
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
@@ -104,6 +96,7 @@ def process_file(file_path, client, system_prompt, model_id):
                 {'role': 'system', 'content': system_prompt},
                 {'role': 'user', 'content': content}
             ],
+            temperature=temperature,
             stream=False
         )
         
@@ -159,6 +152,20 @@ def save_provider_api_key(provider_name, api_key):
     config['provider_keys'][provider_name] = api_key
     save_config(config)
 
+def get_model_temperature():
+    """获取模型温度设置"""
+    config = load_config()
+    model_settings = config.get('model_settings', {})
+    return model_settings.get('temperature', 0.7)
+
+def save_model_temperature(temperature):
+    """保存模型温度设置"""
+    config = load_config()
+    if 'model_settings' not in config:
+        config['model_settings'] = {}
+    config['model_settings']['temperature'] = temperature
+    save_config(config)
+
 def main():
     st.set_page_config(page_title="AI批量总结助手", layout="wide")
     
@@ -197,6 +204,24 @@ def main():
         if api_key != current_api_key:
             save_provider_api_key(selected_provider, api_key)
             st.success("API Key已保存")
+        
+        # 模型温度设置
+        st.divider()
+        st.subheader("模型参数设置")
+        
+        current_temperature = get_model_temperature()
+        temperature = st.slider(
+            "模型温度",
+            min_value=0.0,
+            max_value=2.0,
+            value=current_temperature,
+            step=0.1,
+            help="温度值控制输出的随机性。0表示确定性输出（最稳定），2表示高随机性（最创意）。建议值：\n- 总结：0.3-0.5（较低）\n- 创意写作：1.0-1.5（较高）\n- 常规任务：0.7-0.8（适中）"
+        )
+        
+        if temperature != current_temperature:
+            save_model_temperature(temperature)
+            st.success(f"温度已设置为 {temperature}")
         
         # 添加新的提供者
         with st.expander("添加新的AI提供者"):
@@ -340,6 +365,9 @@ def main():
             # 获取选中的模型ID
             model_id = all_providers[selected_provider]["models"][selected_model]
             
+            # 获取温度设置
+            temperature = get_model_temperature()
+            
             # 扫描文件
             with st.spinner("正在扫描文件..."):
                 txt_files = scan_txt_files(directory)
@@ -348,7 +376,7 @@ def main():
                 st.warning("📂 未找到txt文件")
                 return
             
-            st.info(f"找到 {len(txt_files)} 个txt文件")
+            st.info(f"找到 {len(txt_files)} 个txt文件，使用温度值: {temperature}")
             
             # 显示进度
             progress_bar = st.progress(0)
@@ -362,7 +390,7 @@ def main():
                 status_text.text(f"⏳ 正在处理: {file_path}")
                 
                 # 处理文件
-                response = process_file(file_path, client, all_prompts[selected_prompt_name], model_id)
+                response = process_file(file_path, client, all_prompts[selected_prompt_name], model_id, temperature)
                 
                 # 保存响应
                 md_path = save_response(file_path, response)
