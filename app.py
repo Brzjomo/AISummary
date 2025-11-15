@@ -75,14 +75,20 @@ def save_custom_prompts(prompts):
     config['custom_prompts'] = prompts
     save_config(config)
 
-def scan_txt_files(directory):
-    """扫描目录及其子目录中的所有txt文件"""
-    txt_files = []
+def scan_files_by_extension(directory, extensions):
+    """扫描目录及其子目录中指定扩展名的文件
+    Args:
+        directory: 目录路径
+        extensions: 扩展名列表，如 ['txt', 'srt']（不包含点）
+    """
+    matched_files = []
+    extensions = [ext.lower() if ext.startswith('.') else f'.{ext.lower()}' for ext in extensions]
     for root, dirs, files in os.walk(directory):
         for file in files:
-            if file.endswith('.txt'):
-                txt_files.append(os.path.join(root, file))
-    return txt_files
+            file_ext = os.path.splitext(file)[1].lower()
+            if file_ext in extensions:
+                matched_files.append(os.path.join(root, file))
+    return matched_files
 
 def process_file(file_path, client, system_prompt, model_id, temperature=0.7):
     """处理单个文件并返回AI响应"""
@@ -104,19 +110,33 @@ def process_file(file_path, client, system_prompt, model_id, temperature=0.7):
     except Exception as e:
         return f"处理文件时出错: {str(e)}"
 
-def save_response(file_path, response):
-    """将响应保存为md文件"""
+def save_response(file_path, response, output_format='md'):
+    """将响应保存为指定格式的文件
+    Args:
+        file_path: 原文件路径
+        response: AI响应内容
+        output_format: 输出文件格式，如 'md', 'txt', 'srt' 等（不包含点）
+    """
     # 获取原文件所在目录和文件名
     directory = os.path.dirname(file_path)
     filename = os.path.basename(file_path)
-    # 直接将.txt替换为.md
-    md_filename = filename.replace('.txt', '.md')
-    md_path = os.path.join(directory, md_filename)
     
-    with open(md_path, 'w', encoding='utf-8') as f:
+    # 获取原文件的扩展名（如 .txt, .srt 等）
+    file_ext = os.path.splitext(filename)[1]
+    file_name_without_ext = os.path.splitext(filename)[0]
+    
+    # 如果没有包含点，自动添加
+    if not output_format.startswith('.'):
+        output_format = f'.{output_format}'
+    
+    # 生成输出文件名
+    output_filename = file_name_without_ext + output_format
+    output_path = os.path.join(directory, output_filename)
+    
+    with open(output_path, 'w', encoding='utf-8') as f:
         f.write(response)
     
-    return md_path
+    return output_path
 
 def load_providers():
     """加载AI提供者配置"""
@@ -223,6 +243,76 @@ def main():
             save_model_temperature(temperature)
             st.success(f"温度已设置为 {temperature}")
         
+        # 文件类型选择
+        st.divider()
+        st.subheader("文件类型选择")
+        
+        file_type_option = st.radio(
+            "选择处理方式",
+            options=["预设类型", "自定义类型"],
+            horizontal=True,
+            help="选择使用预设的文件类型或自定义",
+            key="file_type_option"
+        )
+        
+        if file_type_option == "预设类型":
+            selected_file_types = st.multiselect(
+                "选择要处理的文件类型",
+                options=["txt", "srt", "md", "log"],
+                default=["txt"],
+                help="选择一个或多个文件类型",
+                key="preset_file_types"
+            )
+        else:
+            custom_types_input = st.text_input(
+                "输入文件扩展名（逗号分隔）",
+                value="txt,srt",
+                placeholder="例：txt,srt,md,log",
+                help="输入要处理的文件扩展名，用逗号分隔",
+                key="custom_file_types"
+            )
+            selected_file_types = [t.strip() for t in custom_types_input.split(',') if t.strip()]
+        
+        if not selected_file_types:
+            st.warning("请选择至少一个文件类型")
+            selected_file_types = ["txt"]  # 默认值
+        
+        # 输出格式选择
+        st.divider()
+        st.subheader("输出格式设置")
+        
+        output_format_option = st.radio(
+            "选择输出格式方式",
+            options=["预设格式", "自定义格式"],
+            horizontal=True,
+            help="选择使用预设的输出格式或自定义",
+            key="output_format_option"
+        )
+        
+        if output_format_option == "预设格式":
+            selected_output_format = st.selectbox(
+                "选择输出文件格式",
+                options=["md", "txt", "srt", "log"],
+                index=0,
+                help="所有处理结果都将保存为选中的格式",
+                key="preset_output_format"
+            )
+        else:
+            custom_output_format = st.text_input(
+                "输入输出文件扩展名",
+                value="md",
+                placeholder="例：md, txt, srt",
+                help="输入输出文件的扩展名（不包含点）",
+                key="custom_output_format"
+            )
+            selected_output_format = custom_output_format.strip().lstrip('.')
+        
+        if not selected_output_format:
+            st.warning("请输入有效的输出格式")
+            selected_output_format = "md"  # 默认值
+        
+        st.markdown("---")
+
         # 添加新的提供者
         with st.expander("添加新的AI提供者"):
             new_provider_name = st.text_input("提供者名称")
@@ -370,13 +460,15 @@ def main():
             
             # 扫描文件
             with st.spinner("正在扫描文件..."):
-                txt_files = scan_txt_files(directory)
+                matched_files = scan_files_by_extension(directory, selected_file_types)
             
-            if not txt_files:
-                st.warning("📂 未找到txt文件")
+            if not matched_files:
+                file_types_str = ", ".join(selected_file_types)
+                st.warning(f"📂 未找到指定类型的文件（{file_types_str}）")
                 return
             
-            st.info(f"找到 {len(txt_files)} 个txt文件，使用温度值: {temperature}")
+            file_types_str = ", ".join(selected_file_types)
+            st.info(f"找到 {len(matched_files)} 个文件 ({file_types_str})，输出格式: .{selected_output_format}，使用温度值: {temperature}")
             
             # 显示进度
             progress_bar = st.progress(0)
@@ -387,29 +479,30 @@ def main():
             processed_files = []
             skipped_count = 0
 
-            for i, file_path in enumerate(txt_files):
+            for i, file_path in enumerate(matched_files):
                 status_text.text(f"⏳ 正在处理: {file_path}")
 
-                # 生成对应的 md 文件路径
-                directory = os.path.dirname(file_path)
-                filename = os.path.basename(file_path)
-                md_filename = filename.replace('.txt', '.md')
-                md_path = os.path.join(directory, md_filename)
+                # 生成对应的输出文件路径
+                file_dir = os.path.dirname(file_path)
+                file_name = os.path.basename(file_path)
+                file_name_without_ext = os.path.splitext(file_name)[0]
+                output_filename = file_name_without_ext + f'.{selected_output_format}'
+                output_path = os.path.join(file_dir, output_filename)
 
-                # 如果已存在同名 md 文件，则跳过处理
-                if os.path.exists(md_path):
+                # 如果已存在同名输出文件，则跳过处理
+                if os.path.exists(output_path):
                     skipped_count += 1
-                    processed_files.append((file_path, md_path, '跳过-已存在'))
+                    processed_files.append((file_path, output_path, '跳过-已存在'))
                 else:
                     # 处理文件
                     response = process_file(file_path, client, all_prompts[selected_prompt_name], model_id, temperature)
 
-                    # 保存响应
-                    md_path = save_response(file_path, response)
-                    processed_files.append((file_path, md_path, '已处理'))
+                    # 保存响应，使用指定的输出格式
+                    output_path = save_response(file_path, response, selected_output_format)
+                    processed_files.append((file_path, output_path, '已处理'))
 
                 # 更新进度
-                progress = (i + 1) / len(txt_files)
+                progress = (i + 1) / len(matched_files)
                 progress_bar.progress(progress)
 
                 # 更新处理结果显示
@@ -424,7 +517,7 @@ def main():
                 )
             
             status_text.text("✅ 处理完成！")
-            st.success(f"完成：共扫描 {len(txt_files)} 个文件，已处理 {len(txt_files)-skipped_count} 个，跳过 {skipped_count} 个（已存在同名md）")
+            st.success(f"完成：共扫描 {len(matched_files)} 个文件，已处理 {len(matched_files)-skipped_count} 个，跳过 {skipped_count} 个（已存在同名md）")
             
         except Exception as e:
             st.error(f"❌ 处理过程中出错: {str(e)}")
