@@ -90,8 +90,18 @@ def scan_files_by_extension(directory, extensions):
                 matched_files.append(os.path.join(root, file))
     return matched_files
 
-def process_file(file_path, client, system_prompt, model_id, temperature=0.7):
-    """处理单个文件并返回AI响应"""
+def process_file(file_path, client, system_prompt, model_id, temperature=0.7, output_format='txt'):
+    """处理单个文件并返回AI响应
+    Args:
+        file_path: 输入文件路径
+        client: OpenAI客户端
+        system_prompt: 系统提示词
+        model_id: 模型ID
+        temperature: 温度参数
+        output_format: 输出格式(txt, json等)
+    Returns:
+        处理结果（根据output_format返回相应格式）
+    """
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
@@ -106,9 +116,30 @@ def process_file(file_path, client, system_prompt, model_id, temperature=0.7):
             stream=False
         )
         
-        return completion.choices[0].message.content
+        response_content = completion.choices[0].message.content
+        
+        # 如果输出格式是json，则将结果包装成JSON格式
+        if output_format.lower() == 'json':
+            result_data = {
+                'source_file': file_path,
+                'original_content_length': len(content),
+                'system_prompt': system_prompt,
+                'model': model_id,
+                'temperature': temperature,
+                'response': response_content
+            }
+            return json.dumps(result_data, ensure_ascii=False, indent=2)
+        
+        return response_content
     except Exception as e:
-        return f"处理文件时出错: {str(e)}"
+        error_msg = f"处理文件时出错: {str(e)}"
+        if output_format.lower() == 'json':
+            error_data = {
+                'source_file': file_path,
+                'error': error_msg
+            }
+            return json.dumps(error_data, ensure_ascii=False, indent=2)
+        return error_msg
 
 def save_response(file_path, response, output_format='md'):
     """将响应保存为指定格式的文件
@@ -292,7 +323,7 @@ def main():
         if output_format_option == "预设格式":
             selected_output_format = st.selectbox(
                 "选择输出文件格式",
-                options=["md", "txt", "srt", "log"],
+                options=["md", "txt", "srt", "log", "json"],
                 index=0,
                 help="所有处理结果都将保存为选中的格式",
                 key="preset_output_format"
@@ -495,7 +526,7 @@ def main():
                     processed_files.append((file_path, output_path, '跳过-已存在'))
                 else:
                     # 处理文件
-                    response = process_file(file_path, client, all_prompts[selected_prompt_name], model_id, temperature)
+                    response = process_file(file_path, client, all_prompts[selected_prompt_name], model_id, temperature, selected_output_format)
 
                     # 保存响应，使用指定的输出格式
                     output_path = save_response(file_path, response, selected_output_format)
