@@ -198,9 +198,9 @@ class JsonToPbfConverter:
                     successful_conversions += 1
                     
                 # 显示生成的PBF内容预览
-                print("  生成的PBF文件内容预览:")
-                for line in pbf_content.split('\n'):
-                    print(f"    {line}")
+                # print("  生成的PBF文件内容预览:")
+                # for line in pbf_content.split('\n'):
+                #     print(f"    {line}")
             else:
                 print(f"  转换失败: {json_file}")
         
