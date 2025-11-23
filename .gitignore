@@ -2,3 +2,8 @@ test
 config.json
 *.mp3
 *.jsonl
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python

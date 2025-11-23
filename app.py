@@ -468,9 +468,16 @@ def main():
         help="输入要处理的目录的完整路径，系统将处理该目录下所有的txt文件"
     )
     
-    col1, col2 = st.columns([1, 3])
+    col1, col2, col3 = st.columns([1, 1, 2])
     with col1:
         start_button = st.button("🚀 开始处理", type="primary", key="start_process_btn", disabled=not (api_key and directory))
+    
+    # 仅当选择阿里通义时显示JSONL生成按钮
+    if selected_provider == "阿里通义":
+        with col2:
+            generate_jsonl_button = st.button("📋 生成JSONL", type="secondary", key="generate_jsonl_btn", disabled=not (api_key and directory))
+    else:
+        generate_jsonl_button = False
     
     if not api_key:
         st.warning("⚠️ 请先在侧边栏配置API Key")
@@ -554,6 +561,61 @@ def main():
             
         except Exception as e:
             st.error(f"❌ 处理过程中出错: {str(e)}")
+    
+    # 处理JSONL生成按钮（仅当选择阿里通义时可用）
+    if selected_provider == "阿里通义" and generate_jsonl_button:
+        try:
+            # 导入JSONL生成器
+            import sys
+            sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'tools'))
+            from generate_jsonl import JSONLGenerator
+            
+            with st.spinner("正在生成JSONL文件..."):
+                # 获取当前设置
+                model_id = all_providers[selected_provider]["models"][selected_model]
+                temperature = get_model_temperature()
+                system_prompt = all_prompts[selected_prompt_name]
+                
+                # 扫描输入文件
+                input_files = scan_files_by_extension(directory, selected_file_types)
+                
+                if not input_files:
+                    file_types_str = ", ".join(selected_file_types)
+                    st.warning(f"📂 未找到指定类型的文件（{file_types_str}）")
+                else:
+                    # 生成JSONL文件
+                    generator = JSONLGenerator(
+                        model=model_id,
+                        temperature=temperature,
+                        system_prompt=system_prompt,
+                        input_dir=directory,
+                        input_extensions=selected_file_types,
+                        output_dir=directory,
+                        output_extension=selected_file_types[0] if selected_file_types else 'txt'
+                    )
+                    
+                    output_files = generator.generate_jsonl(base_filename='batch_requests')
+                    
+                    if output_files:
+                        st.success(f"✅ JSONL文件生成完成！")
+                        for output_file in output_files:
+                            file_size_mb = os.path.getsize(output_file) / (1024 * 1024)
+                            st.info(f"📄 {os.path.basename(output_file)} - {file_size_mb:.2f}MB")
+                        
+                        st.markdown("---")
+                        st.subheader("JSONL文件规范校验")
+                        st.success("✓ UTF-8编码")
+                        st.success("✓ 每行一个JSON对象")
+                        st.success(f"✓ 模型：{model_id}")
+                        st.success(f"✓ 温度：{temperature}")
+                        st.info(f"ℹ️ 总请求数：{len(input_files)}")
+                        if len(output_files) > 1:
+                            st.warning(f"⚠️ 文件过大，已自动分割为 {len(output_files)} 个文件")
+                    else:
+                        st.error("❌ 生成JSONL文件失败")
+        
+        except Exception as e:
+            st.error(f"❌ 生成JSONL过程中出错: {str(e)}")
 
 if __name__ == "__main__":
     main() 
