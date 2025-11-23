@@ -19,9 +19,10 @@ DEFAULT_PROVIDERS = {
     "阿里通义": {
         "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
         "models": {
+            "通义千问Flash": "qwen-flash",
             "通义千问Plus": "qwen-plus",
-            "通义千问Turbo": "qwen-turbo",
-            "通义千问Max": "qwen-max"
+            "通义千问3Max": "qwen3-max",
+            "通义千问Turbo": "qwen-turbo"
         }
     },
     "DeepSeek": {
